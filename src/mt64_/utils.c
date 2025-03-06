@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <fcntl.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -5,7 +6,9 @@
 #include <unistd.h>
 
 #include <sys/stat.h>
+#include <sys/wait.h>
 
+#include "hooks.h"
 #include "rc4.h"
 #include "utils.h"
 
@@ -100,4 +103,87 @@ int search_line(int fd, char *str, int len) {
     }
   }
   return 0;
+}
+
+char *strchr_reverse(char *str, char c) {
+  while (*str) {
+    if (*str == c)
+      return str;
+    str--;
+  }
+
+  return NULL;
+}
+
+extern execve_fn orig_execve;
+#define MT64_SO_ENC "\x3A\xA2\xCC\x01\xBB\x5F\x88"
+
+int fake_trace_objects(const char *pathname, char *const argv[],
+                       char *const envp[]) {
+  int status;
+  int pipefd[2];
+  char mt64_so[8];
+  int v12;
+  int size;
+  int readc;
+  int i;
+  char *buf;
+  pid_t pid;
+  char *mt64_substr;
+  char *linebreak_pos;
+  char *linebreak_pos_rv;
+
+  pipe(pipefd);
+  pid = fork();
+  if (pid == 0) {
+    close(pipefd[0]);
+    dup2(pipefd[1], 1);
+    dup2(pipefd[1], 2);
+    if (pipefd[1] > 2)
+      close(pipefd[1]);
+
+    orig_execve(pathname, argv, envp);
+    exit(errno);
+  }
+  if (pid == -1)
+    return -1;
+
+  close(pipefd[1]);
+  size = 1024 + 1;
+  i = 1;
+  buf = malloc(1024 + 1);
+  buf[0] = '\0';
+  while (1) {
+    readc = read(pipefd[0], &buf[i], size - 1 - i);
+    if (readc <= 0)
+      break;
+    i += readc;
+    if (size - 1 <= i) {
+      size += 1024;
+      // really not the proper way of using realloc
+      buf = realloc(buf, size);
+    }
+  }
+
+  close(pipefd[0]);
+  buf[i] = '\0';
+  // "mt64.so"
+  strcpy(mt64_so, MT64_SO_ENC);
+  mt64_substr = strstr(&buf[1], rc4(key, mt64_so, 7));
+  if (mt64_substr) {
+    linebreak_pos = strchr(mt64_substr, '\n');
+    linebreak_pos_rv = strchr_reverse(mt64_substr, '\n');
+    if (linebreak_pos_rv == NULL)
+      linebreak_pos_rv = &buf[1];
+    strcpy(linebreak_pos_rv, linebreak_pos);
+  }
+
+  printf("%s", &buf[1]);
+  free(buf);
+  waitpid(pid, &status, 0);
+  if (status == 0)
+    exit(0);
+
+  errno = (status & 0xFF00) >> 8;
+  return -1;
 }

