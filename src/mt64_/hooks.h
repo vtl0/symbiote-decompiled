@@ -51,8 +51,8 @@ LD_HOOK int fstatat (int fd, const char *restrict path,
                      struct stat *restrict buf, int flag);
 LD_HOOK int pam_acct_mgmt(pam_handle_t *pamh, int flags);
 LD_HOOK int pam_authenticate(pam_handle_t *pamh, int flags);
-LD_HOOK int execve(const char *pathname, char *const _Nullable argv[],
-                   char *const _Nullable envp[]);
+LD_HOOK int execve(const char *pathname, char *const argv[],
+                   char *const envp[]);
 LD_HOOK FILE *fopen64(const char *pathname, const char *mode);
 LD_HOOK int stat(const char *restrict pathname,
                  struct stat *restrict statbuf);
@@ -65,7 +65,7 @@ LD_HOOK FILE *fopen(const char *restrict pathname,
 LD_HOOK ssize_t recvmsg(int socket, struct msghdr *message, int flags);
 LD_HOOK int pam_set_item(pam_handle_t *pamh, int item_type,
                          const void *item);
-LD_HOOK int statx(int dirfd, const char *_Nullable restrict pathname,
+LD_HOOK int statx(int dirfd, const char *restrict pathname,
                   int flags, unsigned int mask,
                   struct statx *restrict statxbuf);
 LD_HOOK int fstatat64(int dirfd, const char *pathname,

