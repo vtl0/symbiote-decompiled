@@ -58,7 +58,7 @@ const struct enc_str fth[9] = {
 };
 
 const struct sock_filter filter[] = {
-    { 0x0028 /* BPF_LD | BPF_W | BPF_ABS */, 0, 0, 0x0000000c /* Ethernet type offset */ },
+    { 0x0028 /* BPF_LD | BPF_W | BPF_ABS */, 0, 0, 0x0000000c },
     { 0x0015 /* BPF_JMP | BPF_JEQ */, 0, 18, 0x00000800 },
     { 0x0020 /* BPF_LD | BPF_W | BPF_ABS */, 0, 0, 0x0000001a },
     { 0x0015 /* BPF_JMP | BPF_JEQ */, 35, 0, 0x0a7b243a },
@@ -80,7 +80,7 @@ const struct sock_filter filter[] = {
     { 0x0015 /* BPF_JMP | BPF_JEQ */, 19, 18, 0x0000ba07 },
     { 0x0015 /* BPF_JMP | BPF_JEQ */, 1, 0, 0x00000806 },
     { 0x0015 /* BPF_JMP | BPF_JEQ */, 0, 6, 0x00008035 },
-    { 0x0020 /* BPF_LD | BPF_W | BPF_ABS */, 0, 0, 0x0000001c /* Source IP offset */ },
+    { 0x0020 /* BPF_LD | BPF_W | BPF_ABS */, 0, 0, 0x0000001c },
     { 0x0015 /* BPF_JMP | BPF_JEQ */, 15, 0, 0x0a7b243a },
     { 0x0015 /* BPF_JMP | BPF_JEQ */, 14, 0, 0x0a7b089d },
     { 0x0020 /* BPF_LD | BPF_W | BPF_ABS */, 0, 0, 0x00000026 },
